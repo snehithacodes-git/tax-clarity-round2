@@ -19,7 +19,7 @@ export default function TaxPlanner(){
     const totalIncome = gross+other;
     const taxable = Math.max(0, totalIncome - deductions - DEFAULT_ASSUMPTIONS.stdDeduction);
     const est = estimateTax(taxable, regime, DEFAULT_ASSUMPTIONS);
-    return {totalIncome, deductions, taxable, ...est, balance: est.tax - tds};
+    return {totalIncome, deductions, ...est, balance: est.tax - tds};
   },[gross,other,c80,d80,nps,home,tds,regime]);
 
   return (
