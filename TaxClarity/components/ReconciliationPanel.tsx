@@ -53,9 +53,10 @@ export default function ReconciliationPanel() {
 
   const result = valid
     ? classify(numA, numB, {
-        avg: Number.isFinite(average) && average >= 0
-          ? average
-          : undefined,
+        avg:
+          Number.isFinite(average) && average >= 0
+            ? average
+            : undefined,
       })
     : null;
 
@@ -81,23 +82,7 @@ export default function ReconciliationPanel() {
             ? "Value too large"
             : "";
 
-  function saveDecision(
-    status: Decision["status"],
-    decisionReason: string
-  ) {
-    if (!valid || !result) {
-      setMessage("Please enter valid, non-negative amounts first.");
-      return;
-    }
-
-    const next: Decision = {
-      status,
-      reason: decisionReason,
-      timestamp: new Date().toISOString(),
-      amountA: numA,
-      amountB: numB,
-    };
-
+  function persist(next: Decision) {
     const nextHistory = [...history, next];
 
     try {
@@ -111,119 +96,109 @@ export default function ReconciliationPanel() {
 
       setDecision(next);
       setHistory(nextHistory);
-      setMessage(
-        status === "Confirmed"
-          ? "Reconciliation confirmed and saved in this browser."
-          : "Override saved with its reason."
-      );
+      return true;
+    } catch {
+      setMessage("Could not save. Check browser storage settings.");
+      return false;
+    }
+  }
+
+  function confirmDecision() {
+    if (!valid || !result) {
+      setMessage("Enter valid amounts before confirming.");
+      return;
+    }
+
+    const saved = persist({
+      status: "Confirmed",
+      reason: "Confirmed after reviewing the displayed amounts.",
+      timestamp: new Date().toISOString(),
+      amountA: numA,
+      amountB: numB,
+    });
+
+    if (saved) setMessage("Reconciliation confirmed and saved.");
+  }
+
+  function submitOverride() {
+    if (!valid || !result) {
+      setMessage("Enter valid amounts before overriding.");
+      return;
+    }
+
+    if (!reason.trim()) {
+      setMessage("Please enter a reason for the override.");
+      return;
+    }
+
+    const saved = persist({
+      status: "Overridden",
+      reason: reason.trim(),
+      timestamp: new Date().toISOString(),
+      amountA: numA,
+      amountB: numB,
+    });
+
+    if (saved) {
       setOverrideOpen(false);
       setReason("");
-    } catch {
-      setMessage("Save failed. Please check browser storage settings.");
+      setMessage("Override saved successfully.");
     }
   }
 
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="font-bold">Reconciliation Engine</h2>
+    <section className="card space-y-5 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">Reconciliation Engine</h2>
         <Badge tone="success">Live calculation</Badge>
       </div>
 
-      <p className="mt-1 text-xs text-slate-500">
-        Compare two amounts and record a reconciliation decision.
-        Demo data only.
+      <p className="text-xs text-slate-500">
+        Demo data only. Compare two amounts and record your decision.
       </p>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Input
-          label="Source A - Payslip Sum (₹)"
+          label="Source A (₹)"
           value={a}
-          onChange={(e: any) => {
-            setA(e.target.value);
-            setMessage("");
-          }}
+          onChange={(e: any) => setA(e.target.value)}
           error={errA}
         />
-
         <Input
-          label="Source B - Form 16 Reference (₹)"
+          label="Source B (₹)"
           value={b}
-          onChange={(e: any) => {
-            setB(e.target.value);
-            setMessage("");
-          }}
+          onChange={(e: any) => setB(e.target.value)}
           error={errB}
         />
-
         <Input
-          label="Average for plausibility check (₹)"
+          label="Reference average (₹)"
           value={avg}
           onChange={(e: any) => setAvg(e.target.value)}
         />
       </div>
 
       {valid && result && (
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-xl bg-slate-900 p-4 text-white">
-            <div className="text-xs opacity-70">AMOUNT DIFFERENCE</div>
-            <div className="mt-1 text-2xl font-bold">
+            <p className="text-xs opacity-70">AMOUNT DIFFERENCE</p>
+            <p className="mt-1 text-2xl font-bold">
               ₹{(numA - numB).toLocaleString("en-IN")}
-            </div>
-            <div className="mt-2 text-xs">
-              Source A: ₹{numA.toLocaleString("en-IN")}
-            </div>
-            <div className="text-xs">
-              Source B: ₹{numB.toLocaleString("en-IN")}
-            </div>
-            <div className="mt-3">
-              <Badge
-                tone={
-                  result.type === "ROUNDING"
-                    ? "neutral"
-                    : result.type === "IMPLAUSIBLE"
-                      ? "coral"
-                      : "amber"
-                }
-              >
-                {result.type}
-              </Badge>
-            </div>
+            </p>
+            <p className="mt-3 text-sm">Finding: {result.type}</p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-bold">Explain & Reconcile</h3>
-
-            <div className="mt-3 space-y-2 text-xs">
+          <div className="rounded-xl border p-4">
+            <h3 className="font-bold">Explain & Reconcile</h3>
+            <div className="mt-3 space-y-2 text-sm">
               <p><b>Finding:</b> {result.what}</p>
               <p><b>Why it matters:</b> {result.why}</p>
               <p><b>Next action:</b> {result.next}</p>
-              <p><b>Confidence:</b> {result.confidence}</p>
             </div>
-
-            {decision && (
-              <div className="mt-3 rounded-lg border p-3 text-sm">
-                <p className="font-semibold">
-                  Current decision: {decision.status}
-                </p>
-                <p className="mt-1 text-xs text-slate-600">
-                  Reason: {decision.reason}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {new Date(decision.timestamp).toLocaleString()}
-                </p>
-              </div>
-            )}
 
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  saveDecision(
-                    "Confirmed",
-                    "Confirmed after reviewing the displayed amounts."
-                  )
-                }
+                onClick={confirmDecision}
                 className="rounded-full bg-midnight px-4 py-2 text-xs font-semibold text-white"
               >
                 Confirm & Keep
@@ -232,11 +207,11 @@ export default function ReconciliationPanel() {
               <button
                 type="button"
                 onClick={() => {
+                  setMessage("");
                   setReason("");
                   setOverrideOpen(true);
-                  setMessage("");
                 }}
-                className="rounded-full border px-4 py-2 text-xs font-semibold"
+                className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold hover:bg-slate-100"
               >
                 Override with reason
               </button>
@@ -246,39 +221,37 @@ export default function ReconciliationPanel() {
       )}
 
       {overrideOpen && (
-        <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
           <h3 className="font-bold">Override reconciliation</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Explain why the displayed reconciliation finding should be
-            overridden. This reason will be saved with the decision.
+            Enter why you are overriding this finding. Your reason will be
+            saved with the decision.
           </p>
 
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Enter a specific reason for this override..."
-            className="mt-3 min-h-24 w-full rounded-lg border bg-white p-3 text-sm"
+            placeholder="For example: Verified against the corrected source document..."
+            className="mt-3 min-h-24 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm"
           />
 
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={submitOverride}
               disabled={!reason.trim()}
-              onClick={() => {
-                if (!reason.trim()) {
-                  setMessage("An override reason is required.");
-                  return;
-                }
-                saveDecision("Overridden", reason.trim());
-              }}
-              className="rounded-full bg-midnight px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              className="rounded-full bg-midnight px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               Save override
             </button>
 
             <button
               type="button"
-              onClick={() => setOverrideOpen(false)}
+              onClick={() => {
+                setOverrideOpen(false);
+                setReason("");
+                setMessage("");
+              }}
               className="rounded-full border bg-white px-4 py-2 text-xs"
             >
               Cancel
@@ -288,22 +261,36 @@ export default function ReconciliationPanel() {
       )}
 
       {message && (
-        <p role="status" aria-live="polite" className="mt-4 text-sm">
+        <p role="status" aria-live="polite" className="text-sm">
           {message}
         </p>
       )}
 
+      {decision && (
+        <div className="rounded-xl border p-4">
+          <h3 className="font-bold">Latest saved decision</h3>
+          <p className="mt-2 text-sm">
+            Status: <b>{decision.status}</b>
+          </p>
+          <p className="mt-1 text-sm">Reason: {decision.reason}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {new Date(decision.timestamp).toLocaleString()}
+          </p>
+        </div>
+      )}
+
       {history.length > 0 && (
-        <div className="mt-6 border-t pt-4">
-          <h3 className="font-bold text-sm">Decision history</h3>
+        <div>
+          <h3 className="font-bold">Decision history</h3>
           <ul className="mt-3 space-y-3">
             {[...history].reverse().map((item, index) => (
-              <li key={`${item.timestamp}-${index}`} className="text-xs">
-                <b>{item.status}</b> — A: ₹
-                {item.amountA.toLocaleString("en-IN")} / B: ₹
-                {item.amountB.toLocaleString("en-IN")}
-                <p className="mt-1 text-slate-600">{item.reason}</p>
-                <p className="text-slate-500">
+              <li
+                key={`${item.timestamp}-${index}`}
+                className="rounded-lg border p-3 text-sm"
+              >
+                <b>{item.status}</b>
+                <p className="mt-1">{item.reason}</p>
+                <p className="mt-1 text-xs text-slate-500">
                   {new Date(item.timestamp).toLocaleString()}
                 </p>
               </li>
@@ -312,11 +299,10 @@ export default function ReconciliationPanel() {
         </div>
       )}
 
-      <p className="mt-4 text-xs text-slate-500">
-        Prototype only. Decisions are stored in this browser and are not
-        a server-side audit log. Confirming or overriding does not establish
-        that the underlying tax figures are correct.
+      <p className="text-xs text-slate-500">
+        Prototype decisions are stored in this browser. They are not a
+        server-side or tamper-proof audit record.
       </p>
-    </div>
+    </section>
   );
 }
