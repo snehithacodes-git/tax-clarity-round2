@@ -1,39 +1,115 @@
+
 import "./globals.css";
 import type { Metadata } from "next";
-import ThemeToggle from "@/components/ThemeToggle";
+import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "TaxClarity - IMPACTX 2026",
-  description: "Tax-record reconciliation and preparation assistant - Understand, Verify, Prepare"
+  title: "TaxClarity | IMPACTX 2026",
+  description:
+    "TaxClarity helps users compare tax records, investigate discrepancies, review tax-saving options, and organize next steps.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="bg-[#F4F7FB] text-midnight antialiased">
-        <header className="sticky top-0 z-50 backdrop-blur bg-white/80 border-b border-slate-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[64px] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-lg bg-midnight flex items-center justify-center text-white font-bold">TC</div>
-              <div>
-                <div className="font-bold leading-none">TaxClarity</div>
-                <div className="text-[10px] text-slate-500">IMPACTX 2026 • Dataset & Data Engineering</div>
-              </div>
-            </div>
-            <nav className="hidden md:flex items-center gap-6 text-sm">
-              <a href="/" className="hover:text-slate-900">Home</a>
-              <a href="/workspace" className="hover:text-slate-900">Workspace</a>
-              <a href="https://github.com/akshayahasinidesetty/taxclarity" target="_blank" className="hover:text-slate-900">GitHub</a>
-              <ThemeToggle />
+    <html lang="en">
+      <body className="bg-[#F7F8FC] text-slate-900 antialiased">
+        <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+            <a href="/" className="flex shrink-0 items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white">
+                TC
+              </span>
+
+              <span>
+                <span className="block text-base font-bold leading-tight tracking-tight">
+                  TaxClarity
+                </span>
+                <span className="mt-1 block text-[10px] font-medium text-slate-500">
+                  Understand. Verify. Prepare.
+                </span>
+              </span>
+            </a>
+
+            <nav className="flex items-center gap-3 text-sm sm:gap-6">
+              <a
+                href="/"
+                className="hidden font-medium text-slate-600 transition hover:text-indigo-700 sm:inline"
+              >
+                Home
+              </a>
+
+              <a
+                href="/workspace"
+                className="font-medium text-slate-600 transition hover:text-indigo-700"
+              >
+                Workspace
+              </a>
+
+              <a
+                href="https://github.com/snehithacodes-git/tax-clarity-round2"
+                target="_blank"
+                rel="noreferrer"
+                className="hidden font-medium text-slate-600 transition hover:text-indigo-700 sm:inline"
+              >
+                GitHub ↗
+              </a>
+
+              <a
+                href="/workspace"
+                className="inline-flex min-h-9 items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 sm:text-sm"
+              >
+                Open app <span className="ml-2">→</span>
+              </a>
             </nav>
-            <div className="md:hidden flex items-center gap-2"><ThemeToggle /></div>
           </div>
         </header>
-        <main>{children}</main>
+
+        <main className="min-h-[70vh]">{children}</main>
+
         <footer className="mt-16 border-t border-slate-200 bg-white">
-          <div className="max-w-7xl mx-auto px-6 py-6 text-xs text-slate-500 flex flex-col sm:flex-row justify-between gap-2">
-            <span>TaxClarity • Akshaya Hasini Desetty — 25BCE8286 • Snehitha Marella — 25BCA7653 • Prototype Simulation Only</span>
-            <span>Does not submit to Income Tax Department. Verify officially.</span>
+          <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-8 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-xs font-bold text-white">
+                TC
+              </span>
+
+              <div>
+                <p className="text-sm font-bold text-slate-900">
+                  TaxClarity
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  IMPACTX 2026 · Tax-record review prototype
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500">
+              <a
+                href="/workspace"
+                className="transition hover:text-indigo-700"
+              >
+                Workspace
+              </a>
+
+              <a
+                href="https://github.com/snehithacodes-git/tax-clarity-round2"
+                target="_blank"
+                rel="noreferrer"
+                className="transition hover:text-indigo-700"
+              >
+                Source code ↗
+              </a>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 px-4 py-4 text-center text-[11px] leading-5 text-slate-500">
+            TaxClarity is an educational prototype. It does not submit tax
+            returns or independently verify official records. Check applicable
+            rules and information before making financial or tax decisions.
           </div>
         </footer>
       </body>

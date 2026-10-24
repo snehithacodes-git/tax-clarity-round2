@@ -1,21 +1,59 @@
 
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Regime = "old" | "new";
+type PropertyType = "none" | "self" | "letout";
 
 type PlanItem = {
-  priority: number;
   title: string;
   section: string;
-  potential: number;
+  amountToReview: number;
   action: string;
   note: string;
 };
 
 const money = (value: number) =>
-  "₹" + Math.max(0, value).toLocaleString("en-IN");
+  "₹" + Math.round(value).toLocaleString("en-IN");
+
+const toAmount = (value: string) => {
+  if (value.trim() === "") return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+};
+
+function AmountField({
+  label,
+  value,
+  onChange,
+  help,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  help?: string;
+}) {
+  return (
+    <label className="block text-sm font-medium">
+      {label}
+      <input
+        type="number"
+        min="0"
+        step="1"
+        inputMode="numeric"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm"
+      />
+      {help && (
+        <span className="mt-1 block text-xs font-normal text-slate-500">
+          {help}
+        </span>
+      )}
+    </label>
+  );
+}
 
 export default function TaxSavingPlan() {
   const [income, setIncome] = useState("1200000");
@@ -27,284 +65,248 @@ export default function TaxSavingPlan() {
   const [parentSenior, setParentSenior] = useState(false);
   const [educationInterest, setEducationInterest] = useState("0");
   const [homeInterest, setHomeInterest] = useState("0");
-  const [homeType, setHomeType] = useState("none");
+  const [homeType, setHomeType] = useState<PropertyType>("none");
   const [employerNps, setEmployerNps] = useState("0");
   const [generated, setGenerated] = useState(false);
 
-  const number = (value: string) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-  };
+  const annualIncome = toAmount(income);
+  const monthlyBudget = toAmount(budget);
+  const existing80C = toAmount(used80C);
+  const selfPremium = toAmount(selfInsurance);
+  const parentPremium = toAmount(parentInsurance);
+  const education = toAmount(educationInterest);
+  const home = toAmount(homeInterest);
+  const employer = toAmount(employerNps);
 
-  const annualIncome = number(income);
-  const monthlyBudget = number(budget);
-  const current80C = Math.min(150000, number(used80C));
-  const selfPremium = number(selfInsurance);
-  const parentPremium = number(parentInsurance);
-  const education = number(educationInterest);
-  const home = number(homeInterest);
-  const employer = number(employerNps);
-
+  // These are illustrative review limits from the existing prototype,
+  // not a current-year eligibility engine. Verify all applicable rules.
+  const cap80C = 150000;
   const selfHealthCap = 25000;
   const parentHealthCap = parentSenior ? 50000 : 25000;
+  const selfHealthForReview = Math.min(selfPremium, selfHealthCap);
+  const parentHealthForReview = Math.min(parentPremium, parentHealthCap);
+  const unused80CCapacity = Math.max(0, cap80C - Math.min(existing80C, cap80C));
 
-  const selfHealthEligible = Math.min(selfPremium, selfHealthCap);
-  const parentHealthEligible = Math.min(parentPremium, parentHealthCap);
-  const remaining80C = Math.max(0, 150000 - current80C);
+  const plan = useMemo<PlanItem[]>(() => {
+    const items: PlanItem[] = [];
 
-  const plan: PlanItem[] = [];
-
-  if (regime === "old") {
-    if (remaining80C > 0) {
-      plan.push({
-        priority: 1,
-        title: "Review eligible Section 80C contributions",
+    if (regime === "old") {
+      items.push({
+        title: "Check eligible Section 80C payments",
         section: "Section 80C",
-        potential: remaining80C,
+        amountToReview: unused80CCapacity,
         action:
-          "Check existing EPF, eligible life insurance premiums, eligible tuition fees, PPF and other qualifying payments first. Only invest more if it suits your financial goals.",
+          "First total any eligible EPF, PPF, tuition fees, life-insurance premiums and other qualifying payments already made. Only consider further saving if it fits your needs and budget.",
         note:
-          "The ₹1.5 lakh limit is shared across eligible items. Do not double-count amounts already included.",
+          "The remaining amount is unused capacity under the prototype's illustrative limit, not a recommendation to invest and not tax saved. Shared limits and eligibility must be checked.",
       });
-    }
 
-    if (selfHealthEligible < selfHealthCap) {
-      plan.push({
-        priority: 2,
+      items.push({
         title: "Review health insurance for yourself and family",
         section: "Section 80D",
-        potential: selfHealthCap - selfHealthEligible,
+        amountToReview: Math.max(0, selfHealthCap - selfHealthForReview),
         action:
-          "Check whether you already have eligible health insurance and whether additional coverage is genuinely needed. Verify payment and eligibility rules before claiming.",
+          "Check existing coverage, who paid the premium and whether the payment meets the applicable conditions.",
         note:
-          "Potential unused deduction capacity is not a recommendation to buy a policy. Actual benefit depends on eligible payments and statutory conditions.",
+          "The unused figure is a review prompt only. Do not purchase a policy solely for a possible deduction.",
       });
-    }
 
-    if (parentHealthEligible < parentHealthCap) {
-      plan.push({
-        priority: 3,
-        title: "Check eligible health coverage for parents",
+      items.push({
+        title: "Review health expenses or insurance for parents",
         section: "Section 80D",
-        potential: parentHealthCap - parentHealthEligible,
+        amountToReview: Math.max(0, parentHealthCap - parentHealthForReview),
         action:
-          "If relevant, review your parents' existing coverage and medical needs. Confirm who paid the premium and which limit applies.",
+          "Confirm your parents' ages, existing policies, who paid and the conditions that apply to the claim.",
         note:
-          "The illustrative limit depends on age and eligibility. Avoid buying duplicate or unsuitable cover for tax reasons.",
+          "The limit shown is illustrative. The applicable limit and qualifying expenses must be verified for the relevant year.",
       });
-    }
 
-    if (education > 0) {
-      plan.push({
-        priority: 4,
-        title: "Check education-loan interest eligibility",
+      items.push({
+        title: "Check education-loan interest",
         section: "Section 80E",
-        potential: education,
+        amountToReview: education,
         action:
-          "Obtain the lender's annual interest certificate and verify that the loan, lender, course and claimant satisfy the applicable conditions.",
+          "If you already have an eligible education loan, obtain the annual interest certificate and check the borrower, lender and course conditions.",
         note:
-          "This is the interest amount entered, not a verified deduction. Principal repayments are not included.",
+          "This is the amount you entered, not a verified deduction. Do not take a loan solely for tax benefits.",
       });
+
+      if (homeType === "self" && home > 0) {
+        items.push({
+          title: "Check interest on a self-occupied home loan",
+          section: "Section 24(b) review",
+          amountToReview: Math.min(home, 200000),
+          action:
+            "Review the interest certificate, property use, ownership and relevant conditions before claiming.",
+          note:
+            "The displayed cap is illustrative and does not confirm eligibility. Verify the applicable year and regime.",
+        });
+      }
+
+      if (homeType === "letout" && home > 0) {
+        items.push({
+          title: "Review your let-out property calculation",
+          section: "House property",
+          amountToReview: home,
+          action:
+            "Consider rent, eligible interest and the relevant loss set-off rules together. Do not treat the interest amount alone as your tax saving.",
+          note:
+            "Property income rules are more complex than this checklist. Get the complete calculation verified.",
+        });
+      }
     } else {
-      plan.push({
-        priority: 4,
-        title: "Review existing education loans, if any",
-        section: "Section 80E",
-        potential: 0,
+      items.push({
+        title: "Compare the two tax regimes",
+        section: "Regime comparison",
+        amountToReview: 0,
         action:
-          "If you already have a qualifying education loan, check its annual interest certificate. Do not take a new loan simply to obtain a tax deduction.",
+          "Compare total tax under both regimes using the correct tax year, salary details, applicable deductions and current official rules before deciding.",
         note:
-          "Eligibility depends on statutory conditions; an education loan is not a tax-saving purchase.",
+          "This component does not calculate final tax or determine which regime is better for you.",
+      });
+
+      items.push({
+        title: "Check employer NPS contributions",
+        section: "Employer contribution review",
+        amountToReview: employer,
+        action:
+          "Check your salary statement, employer contribution and the conditions and limits applicable to your tax year.",
+        note:
+          "This is the amount entered for review, not a verified deduction. Different contribution types can have different treatment.",
+      });
+
+      if (homeType === "letout" && home > 0) {
+        items.push({
+          title: "Review interest on let-out property",
+          section: "House property",
+          amountToReview: home,
+          action:
+            "Check the full house-property calculation and restrictions under the selected regime.",
+          note:
+            "Do not assume the entire interest amount reduces taxable salary or tax payable.",
+        });
+      }
+
+      items.push({
+        title: "Protect your finances first",
+        section: "Budget and protection",
+        amountToReview: 0,
+        action:
+          "Prioritize essential expenses, emergency savings and suitable insurance based on actual needs and affordability.",
+        note:
+          "Avoid borrowing or buying a financial product just because it appears in a tax checklist.",
       });
     }
 
-    if (homeType === "self" && home > 0) {
-      plan.push({
-        priority: 5,
-        title: "Verify home-loan interest eligibility",
-        section: "Section 24(b)",
-        potential: Math.min(home, 200000),
-        action:
-          "Check the loan certificate, property use, ownership, completion and other applicable conditions with the current rules.",
-        note:
-          "₹2 lakh is an indicative ceiling for certain eligible self-occupied cases under the old-regime rules; it is not a guaranteed deduction.",
-      });
-    } else if (homeType === "letout" && home > 0) {
-      plan.push({
-        priority: 5,
-        title: "Review the let-out property calculation",
-        section: "House property",
-        potential: home,
-        action:
-          "Calculate rental income and eligible interest together. Check the applicable loss set-off and carry-forward restrictions.",
-        note:
-          "Interest is not automatically a deduction from salary. Tax treatment depends on house-property rules.",
-      });
-    }
-  } else {
-    plan.push({
-      priority: 1,
-      title: "Compare both tax regimes before investing",
-      section: "Regime comparison",
-      potential: 0,
-      action:
-        "Use verified current-year tax slabs and eligible deductions to compare total tax under both regimes before choosing.",
-      note:
-        "Most personal deductions under Sections 80C and 80D are not available under the new regime. Do not assume insurance or investment purchases reduce new-regime tax.",
-    });
+    return items;
+  }, [
+    regime,
+    unused80CCapacity,
+    selfHealthForReview,
+    parentHealthForReview,
+    parentHealthCap,
+    education,
+    homeType,
+    home,
+    employer,
+  ]);
 
-    if (employer > 0) {
-      plan.push({
-        priority: 2,
-        title: "Verify employer NPS contribution treatment",
-        section: "Section 80CCD(2)",
-        potential: employer,
-        action:
-          "Check your salary structure, employer contribution, eligible salary base and the current statutory limit.",
-        note:
-          "This is a review amount, not a confirmed eligible deduction. Employee contributions have different rules.",
-      });
-    }
-
-    if (homeType === "letout" && home > 0) {
-      plan.push({
-        priority: 3,
-        title: "Review interest on let-out property",
-        section: "Section 24(b)",
-        potential: home,
-        action:
-          "Check the house-property computation and restrictions applicable to the selected regime.",
-        note:
-          "A deduction in the property calculation does not necessarily reduce tax on salary or other income by the same amount.",
-      });
-    }
-
-    plan.push({
-      priority: 4,
-      title: "Prioritize financial protection over tax deductions",
-      section: "Insurance review",
-      potential: 0,
-      action:
-        "Review health coverage, emergency savings and dependants' protection based on your actual needs and affordability.",
-      note:
-        "Do not buy insurance or borrow money just for a deduction that may not be available in your regime.",
-    });
-  }
-
-  plan.sort((a, b) => a.priority - b.priority);
-
-  const potential80D =
-    regime === "old"
-      ? selfHealthEligible + parentHealthEligible
-      : 0;
-
-  const potential80C = regime === "old" ? current80C : 0;
-
-  const estimatedPotentialDeductions =
-    potential80C +
-    potential80D +
+  const enteredAmountsForReview =
+    (regime === "old" ? Math.min(existing80C, cap80C) : 0) +
+    (regime === "old"
+      ? selfHealthForReview + parentHealthForReview
+      : 0) +
     (regime === "old" ? education : 0) +
     (regime === "old" && homeType === "self"
       ? Math.min(home, 200000)
       : 0);
 
+  function update(setter: (value: string) => void, value: string) {
+    setter(value);
+    setGenerated(false);
+  }
+
   return (
     <section className="space-y-4">
-      <div className="card p-5">
-        <h2 className="text-xl font-bold">Personalized Tax-Saving Plan</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Answer these questions to generate a prioritized checklist for
-          review. This prototype does not verify documents or determine
-          final tax eligibility.
-        </p>
+      <div className="card space-y-5 p-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Planning checklist · Demo
+          </p>
+          <h2 className="mt-1 text-xl font-bold">
+            Build your tax-saving review plan
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Answer what you know. TaxClarity will organize possible items to
+            check and suggest next steps. It does not verify documents, calculate
+            final tax or guarantee that a deduction is allowed.
+          </p>
+        </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm">
-            Annual income (₹)
-            <input
-              type="number"
-              min="0"
-              value={income}
-              onChange={(e) => {
-                setIncome(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+          <p className="font-semibold">Before you begin</p>
+          <p className="mt-1 text-slate-700">
+            Use amounts for the relevant financial year. Estimates and limits
+            in this prototype are illustrative; verify current official rules.
+            Do not enter PAN, Aadhaar or bank account details.
+          </p>
+        </div>
 
-          <label className="text-sm">
-            Monthly budget for additional saving (₹)
-            <input
-              type="number"
-              min="0"
-              value={budget}
-              onChange={(e) => {
-                setBudget(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <AmountField
+            label="Annual income (₹)"
+            value={income}
+            onChange={(v) => update(setIncome, v)}
+            help="Enter your approximate annual income before deductions."
+          />
 
-          <label className="text-sm">
-            Tax regime
+          <AmountField
+            label="Monthly amount available to save (₹)"
+            value={budget}
+            onChange={(v) => update(setBudget, v)}
+            help="An affordability input, not a recommended investment."
+          />
+
+          <label className="block text-sm font-medium">
+            Tax regime you want to review
             <select
               value={regime}
               onChange={(e) => {
                 setRegime(e.target.value as Regime);
                 setGenerated(false);
               }}
-              className="mt-1 w-full rounded-lg border p-2"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm"
             >
               <option value="old">Old regime</option>
               <option value="new">New regime</option>
             </select>
+            <span className="mt-1 block text-xs font-normal text-slate-500">
+              This selection does not confirm that this regime is best for you.
+            </span>
           </label>
 
-          <label className="text-sm">
-            Eligible 80C payments already made (₹)
-            <input
-              type="number"
-              min="0"
-              value={used80C}
-              onChange={(e) => {
-                setUsed80C(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+          <AmountField
+            label="Eligible 80C payments already made (₹)"
+            value={used80C}
+            onChange={(v) => update(setUsed80C, v)}
+            help="Enter qualifying payments already made, if known."
+          />
 
-          <label className="text-sm">
-            Eligible self/family health premiums paid (₹)
-            <input
-              type="number"
-              min="0"
-              value={selfInsurance}
-              onChange={(e) => {
-                setSelfInsurance(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+          <AmountField
+            label="Health insurance premiums paid for self/family (₹)"
+            value={selfInsurance}
+            onChange={(v) => update(setSelfInsurance, v)}
+            help="Enter the amount paid, not a future planned purchase."
+          />
 
-          <label className="text-sm">
-            Eligible parents' health premiums paid (₹)
-            <input
-              type="number"
-              min="0"
-              value={parentInsurance}
-              onChange={(e) => {
-                setParentInsurance(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+          <AmountField
+            label="Health insurance premiums paid for parents (₹)"
+            value={parentInsurance}
+            onChange={(v) => update(setParentInsurance, v)}
+            help="Enter the amount paid, if applicable."
+          />
 
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <label className="flex items-start gap-3 rounded-lg border p-3 text-sm sm:col-span-2">
             <input
               type="checkbox"
               checked={parentSenior}
@@ -312,48 +314,42 @@ export default function TaxSavingPlan() {
                 setParentSenior(e.target.checked);
                 setGenerated(false);
               }}
+              className="mt-1"
             />
-            Parent eligibility may use the senior-citizen limit (verify age
-            and statutory conditions)
+            <span>
+              <span className="font-medium">
+                A parent may qualify under a senior-citizen limit
+              </span>
+              <span className="mt-1 block text-xs text-slate-500">
+                Select only if relevant; age and all statutory conditions must
+                be checked separately.
+              </span>
+            </span>
           </label>
 
-          <label className="text-sm">
-            Education-loan interest paid this year (₹)
-            <input
-              type="number"
-              min="0"
-              value={educationInterest}
-              onChange={(e) => {
-                setEducationInterest(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+          <AmountField
+            label="Education-loan interest paid this year (₹)"
+            value={educationInterest}
+            onChange={(v) => update(setEducationInterest, v)}
+            help="Interest only; do not include principal repayment."
+          />
 
-          <label className="text-sm">
-            Home-loan interest paid this year (₹)
-            <input
-              type="number"
-              min="0"
-              value={homeInterest}
-              onChange={(e) => {
-                setHomeInterest(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+          <AmountField
+            label="Home-loan interest paid this year (₹)"
+            value={homeInterest}
+            onChange={(v) => update(setHomeInterest, v)}
+            help="Use the lender's interest certificate if available."
+          />
 
-          <label className="text-sm">
+          <label className="block text-sm font-medium">
             Property type
             <select
               value={homeType}
               onChange={(e) => {
-                setHomeType(e.target.value);
+                setHomeType(e.target.value as PropertyType);
                 setGenerated(false);
               }}
-              className="mt-1 w-full rounded-lg border p-2"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm"
             >
               <option value="none">No home-loan claim</option>
               <option value="self">Self-occupied property</option>
@@ -361,86 +357,121 @@ export default function TaxSavingPlan() {
             </select>
           </label>
 
-          <label className="text-sm">
-            Employer NPS contribution (₹)
-            <input
-              type="number"
-              min="0"
-              value={employerNps}
-              onChange={(e) => {
-                setEmployerNps(e.target.value);
-                setGenerated(false);
-              }}
-              className="mt-1 w-full rounded-lg border p-2"
-            />
-          </label>
+          <AmountField
+            label="Employer NPS contribution (₹)"
+            value={employerNps}
+            onChange={(v) => update(setEmployerNps, v)}
+            help="Enter the employer contribution if known."
+          />
         </div>
 
         <button
           type="button"
           onClick={() => setGenerated(true)}
-          className="mt-5 rounded-full bg-midnight px-5 py-3 text-sm font-semibold text-white"
+          className="w-full rounded-full bg-midnight px-5 py-3 text-sm font-semibold text-white sm:w-auto"
         >
-          Generate my plan
+          Generate my review plan
         </button>
       </div>
 
       {generated && (
         <>
-          <div className="card p-5">
-            <h3 className="font-bold">Your plan summary</h3>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border p-3">
+          <div className="card space-y-4 p-5">
+            <div>
+              <h3 className="text-lg font-bold">Your summary</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                These numbers organize your inputs. They do not represent tax
+                saved or a confirmed deduction.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border p-4">
                 <p className="text-xs text-slate-500">Annual income entered</p>
-                <p className="mt-1 text-lg font-bold">
-                  {money(annualIncome)}
-                </p>
+                <p className="mt-1 text-xl font-bold">{money(annualIncome)}</p>
               </div>
-              <div className="rounded-xl border p-3">
-                <p className="text-xs text-slate-500">Monthly budget entered</p>
-                <p className="mt-1 text-lg font-bold">
-                  {money(monthlyBudget)}
-                </p>
+
+              <div className="rounded-xl border p-4">
+                <p className="text-xs text-slate-500">Monthly saving budget</p>
+                <p className="mt-1 text-xl font-bold">{money(monthlyBudget)}</p>
               </div>
-              <div className="rounded-xl border p-3">
+
+              <div className="rounded-xl border p-4 sm:col-span-2">
                 <p className="text-xs text-slate-500">
-                  Potential deductions to review
+                  Entered amounts to review
                 </p>
-                <p className="mt-1 text-lg font-bold">
-                  {money(estimatedPotentialDeductions)}
+                <p className="mt-1 text-xl font-bold">
+                  {money(enteredAmountsForReview)}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  This indicative sum includes selected entered amounts. It may
+                  contain amounts that are not eligible, and it does not
+                  include a verified assessment of overlapping claims, all
+                  statutory conditions or the applicable tax year.
                 </p>
               </div>
             </div>
-            <p className="mt-3 text-xs text-slate-500">
-              This is an indicative sum of entered amounts and review limits,
-              not verified deductions or tax saved. It excludes regime-specific
-              validation, overlapping claims, and several statutory conditions.
-            </p>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <h4 className="font-semibold">What this number does not mean</h4>
+              <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-5">
+                <li>It is not the amount of tax you will save.</li>
+                <li>It is not confirmation that a claim is eligible.</li>
+                <li>
+                  Unused deduction capacity is different from money already
+                  paid or invested.
+                </li>
+                <li>
+                  A deduction from taxable income does not reduce tax by the
+                  same amount.
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div className="card p-5">
-            <h3 className="font-bold">Recommended next steps</h3>
+            <h3 className="text-lg font-bold">Recommended next steps</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Work through the checklist in order. Skip anything that does not
+              apply to you.
+            </p>
+
             <div className="mt-4 space-y-4">
               {plan.map((item, index) => (
-                <article key={item.title} className="rounded-xl border p-4">
+                <article
+                  key={item.title}
+                  className="rounded-xl border border-slate-200 p-4"
+                >
                   <div className="flex items-start gap-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold">
                       {index + 1}
                     </span>
+
                     <div className="min-w-0 flex-1">
                       <h4 className="font-semibold">{item.title}</h4>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs font-medium text-slate-500">
                         {item.section}
                       </p>
-                      {item.potential > 0 && (
+
+                      {item.amountToReview > 0 && (
                         <p className="mt-2 text-sm font-semibold">
-                          Amount to verify: {money(item.potential)}
+                          Amount to check: {money(item.amountToReview)}
                         </p>
                       )}
-                      <p className="mt-2 text-sm">{item.action}</p>
-                      <p className="mt-2 text-xs text-slate-500">
-                        {item.note}
-                      </p>
+
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          What to do
+                        </p>
+                        <p className="mt-1 text-sm leading-6">{item.action}</p>
+                      </div>
+
+                      <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                        <p className="text-xs font-semibold">Important note</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-600">
+                          {item.note}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -450,11 +481,12 @@ export default function TaxSavingPlan() {
         </>
       )}
 
-      <p className="px-1 text-xs text-slate-500">
-        Tax rules change by financial year and regime. Verify the applicable
-        provisions with the official Income Tax Department and a qualified
-        tax professional. No loan, insurance or investment is recommended
-        solely to obtain a tax deduction.
+      <p className="px-1 text-xs leading-5 text-slate-500">
+        TaxClarity is an educational prototype, not an official filing service
+        or substitute for qualified tax advice. Rules, section references,
+        eligibility and limits can change. Confirm them for the relevant
+        financial year using the official Income Tax Department resources
+        before making a claim or financial decision.
       </p>
     </section>
   );
